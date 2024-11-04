@@ -1,0 +1,27 @@
+flows:
+  default:
+    envs:
+      CARGO_TERM_COLOR: always
+    nodes:
+      clippy:
+        target: clippy
+        triggers:
+          - code-changes
+      tests:
+        target: tests
+        triggers:
+          - after: [clippy]
+
+targets:
+  tests:
+    commands: |
+      cargo test --quiet
+  clippy:
+    commands: |
+      cargo clippy -- --deny warnings
+
+triggers:
+  code-changes:
+    watch:
+      - src/
+      - Cargo.toml
