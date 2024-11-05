@@ -32,7 +32,7 @@ impl Default for Tab {
     fn default() -> Self {
         Self {
             namespace: Some("default".to_string()),
-            resource: "pod".to_string(),
+            resource: "pods".to_string(),
             filter: String::default(),
         }
     }

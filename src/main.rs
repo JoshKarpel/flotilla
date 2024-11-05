@@ -46,7 +46,12 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                 .recommended_resources()
                 .iter()
                 .filter(|(_, caps)| caps.supports_operation(verbs::LIST))
-                .map(|(res, _)| (res.kind.to_lowercase(), res.clone()))
+                .flat_map(|(res, _)| {
+                    [
+                        (res.kind.to_lowercase(), res.clone()),
+                        (res.plural.to_lowercase(), res.clone()),
+                    ]
+                })
                 .collect_vec()
         })
         .collect();
@@ -57,6 +62,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
         let r = _resources.get(&tab.resource).expect("Unknown resource");
         let api: Api<DynamicObject> = Api::all_with(client.clone(), r);
 
+        // https://ratatui.rs/examples/widgets/table/
         let table = Table::new(
             api.list(&ListParams::default()).await?.iter().map(|obj| {
                 let cells = [Cell::from(Text::from(
@@ -65,7 +71,8 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                 cells.into_iter().collect::<Row>()
             }),
             [Length(10)],
-        );
+        )
+        .block(Block::bordered());
 
         terminal.draw(|frame| {
             let [meta, _resources_layout] =
