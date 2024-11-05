@@ -2,19 +2,21 @@ mod state;
 
 use std::collections::HashMap;
 
+use crossterm::event::KeyEvent;
 use itertools::Itertools;
 use kube::{
-    api::{ApiResource, DynamicObject},
+    api::{ApiResource, DynamicObject, ListParams},
     discovery::verbs,
     Api, Client, Discovery, ResourceExt,
 };
 use ratatui::{
-    crossterm::event::{self, KeyCode, KeyEvent, KeyEventKind},
+    crossterm::event::{self, Event, KeyCode, KeyEventKind},
     layout::{
         Constraint::{Length, Min, Ratio},
         Layout,
     },
-    widgets::{Block, Paragraph},
+    text::Text,
+    widgets::{Block, Cell, Paragraph, Row, Table},
     DefaultTerminal,
 };
 
@@ -36,18 +38,6 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
 
     let client = Client::try_default().await?;
     let discovery = Discovery::new(client.clone()).run().await?;
-    for group in discovery.groups() {
-        for (ar, caps) in group.recommended_resources() {
-            if !caps.supports_operation(verbs::LIST) {
-                continue;
-            }
-            let api: Api<DynamicObject> = Api::all_with(client.clone(), &ar);
-            // can now api.list() to emulate kubectl get all --all
-            for obj in api.list(&Default::default()).await? {
-                println!("{} {}: {}", ar.api_version, ar.kind, obj.name_any());
-            }
-        }
-    }
 
     let _resources: HashMap<String, ApiResource> = discovery
         .groups()
@@ -56,7 +46,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                 .recommended_resources()
                 .iter()
                 .filter(|(_, caps)| caps.supports_operation(verbs::LIST))
-                .map(|(res, _)| (res.kind.clone(), res.clone()))
+                .map(|(res, _)| (res.kind.to_lowercase(), res.clone()))
                 .collect_vec()
         })
         .collect();
@@ -66,9 +56,16 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
 
         let r = _resources.get(&tab.resource).expect("Unknown resource");
         let api: Api<DynamicObject> = Api::all_with(client.clone(), r);
-        for obj in api.list(&Default::default()).await? {
-            println!("{} {}: {}", r.api_version, r.kind, obj.name_any());
-        }
+
+        let table = Table::new(
+            api.list(&ListParams::default()).await?.iter().map(|obj| {
+                let cells = [Cell::from(Text::from(
+                    obj.metadata.name.clone().expect("Object missing name"),
+                ))];
+                cells.into_iter().collect::<Row>()
+            }),
+            [Length(10)],
+        );
 
         terminal.draw(|frame| {
             let [meta, _resources_layout] =
@@ -86,9 +83,10 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
             frame.render_widget(namespace_p, namespace);
             frame.render_widget(resource_p, resource);
             frame.render_widget(filter_p, filter);
+            frame.render_widget(table, _resources_layout);
         })?;
 
-        if let event::Event::Key(KeyEvent {
+        if let Event::Key(KeyEvent {
             kind: KeyEventKind::Press,
             code: KeyCode::Char('q'),
             ..
