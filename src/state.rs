@@ -31,7 +31,7 @@ pub(crate) struct Tab {
 impl Default for Tab {
     fn default() -> Self {
         Self {
-            namespace: None,
+            namespace: Some("default".to_string()),
             resource: "pods".to_string(),
             filter: String::default(),
         }
