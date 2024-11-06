@@ -1,9 +1,11 @@
 mod state;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
+use clap::Parser;
 use crossterm::event::KeyEvent;
 use itertools::Itertools;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::APIResource;
 use kube::{
     api::{ApiResource, DynamicObject, ListParams},
     discovery::verbs,
@@ -22,10 +24,50 @@ use ratatui::{
 
 use crate::state::State;
 
+#[derive(Parser, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    #[arg(long)]
+    discovery: bool,
+}
+
 type DynResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 #[tokio::main]
 async fn main() -> DynResult<()> {
+    let cli = Cli::parse();
+
+    if cli.discovery {
+        let mut resources: HashMap<String, Rc<APIResource>> = HashMap::new();
+        let client = Client::try_default().await?;
+        let apigroups = client.list_api_groups().await?;
+        for g in apigroups.groups {
+            let ver = g
+                .preferred_version
+                .as_ref()
+                .or_else(|| g.versions.first())
+                .expect("preferred or versions exists");
+            let apis = client.list_api_group_resources(&ver.group_version).await?;
+            for api in apis.resources {
+                if !api.verbs.iter().any(|v| v == "list") {
+                    continue;
+                }
+                let a = Rc::new(api);
+                resources.insert(a.singular_name.clone(), a.clone());
+                resources.insert(a.name.clone(), a.clone());
+                for name in a.short_names.as_deref().unwrap_or_default() {
+                    resources.insert(name.clone(), a.clone());
+                }
+            }
+        }
+
+        for (k, v) in resources.iter().sorted_by_key(|(k, _)| k.clone()) {
+            println!("{k:?} -> {v:?}");
+        }
+
+        return Ok(());
+    }
+
     let mut terminal = ratatui::init();
     terminal.clear()?;
     let app_result = run(terminal).await;
@@ -65,10 +107,10 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
         // https://ratatui.rs/examples/widgets/table/
         let table = Table::new(
             api.list(&ListParams::default()).await?.iter().map(|obj| {
-                let cells = [Cell::from(Text::from(
-                    obj.metadata.name.clone().expect("Object missing name"),
-                ))];
-                cells.into_iter().collect::<Row>()
+                [obj.metadata.name.clone().expect("Object missing name")]
+                    .into_iter()
+                    .map(|c| Cell::from(Text::from(c)))
+                    .collect::<Row>()
             }),
             [Length(10)],
         )
