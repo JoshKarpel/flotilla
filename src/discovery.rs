@@ -33,7 +33,7 @@ pub struct DiscoveredAPIResource {
 }
 
 impl DiscoveredAPIResource {
-    fn parse_apiresource(
+    fn parse_api_resource(
         api_resource: &APIResource,
         group_version: &str,
     ) -> Result<Self, ParseGroupVersionError> {
@@ -94,7 +94,7 @@ impl Discovery {
                     continue;
                 }
                 let discovered =
-                    DiscoveredAPIResource::parse_apiresource(&api, &ver.group_version)?;
+                    DiscoveredAPIResource::parse_api_resource(&api, &ver.group_version)?;
                 let a = Rc::new(discovered);
 
                 if !a.singular.is_empty() {
@@ -116,7 +116,7 @@ impl Discovery {
                 if !api.verbs.iter().any(|v| v == "list") {
                     continue;
                 }
-                let discovered = DiscoveredAPIResource::parse_apiresource(&api, &v)?;
+                let discovered = DiscoveredAPIResource::parse_api_resource(&api, &v)?;
                 let a = Rc::new(discovered);
 
                 if !a.singular.is_empty() {
