@@ -80,30 +80,9 @@ impl Discovery {
         // https://github.com/kube-rs/kube/blob/d28a7152538c2560f7af9b7339c090c7ccba9fb6/kube-client/src/discovery/mod.rs#L111-L130
         let mut name_to_resource: HashMap<String, Rc<DiscoveredAPIResource>> = HashMap::new();
 
-        let apigroups = client.list_core_api_versions().await?;
-        for v in apigroups.versions {
-            let apis = client.list_core_api_resources(&v).await?;
-            for api in apis.resources {
-                if !api.verbs.iter().any(|v| v == "list") {
-                    continue;
-                }
-                let discovered = DiscoveredAPIResource::parse_apiresource(&api, &v)?;
-                let a = Rc::new(discovered);
-
-                if !a.singular.is_empty() {
-                    name_to_resource.insert(a.singular.clone(), a.clone());
-                }
-                if !a.plural.is_empty() {
-                    name_to_resource.insert(a.plural.clone(), a.clone());
-                }
-                for name in a.short_names.as_deref().unwrap_or_default() {
-                    name_to_resource.insert(name.clone(), a.clone());
-                }
-            }
-        }
-
-        let apigroups = client.list_api_groups().await?;
-        for g in apigroups.groups {
+        // Discover non-core first so that names for core resources override these names.
+        let api_groups = client.list_api_groups().await?;
+        for g in api_groups.groups {
             let ver = g
                 .preferred_version
                 .as_ref()
@@ -129,6 +108,29 @@ impl Discovery {
                 }
             }
         }
+
+        let core_api_groups = client.list_core_api_versions().await?;
+        for v in core_api_groups.versions {
+            let apis = client.list_core_api_resources(&v).await?;
+            for api in apis.resources {
+                if !api.verbs.iter().any(|v| v == "list") {
+                    continue;
+                }
+                let discovered = DiscoveredAPIResource::parse_apiresource(&api, &v)?;
+                let a = Rc::new(discovered);
+
+                if !a.singular.is_empty() {
+                    name_to_resource.insert(a.singular.clone(), a.clone());
+                }
+                if !a.plural.is_empty() {
+                    name_to_resource.insert(a.plural.clone(), a.clone());
+                }
+                for name in a.short_names.as_deref().unwrap_or_default() {
+                    name_to_resource.insert(name.clone(), a.clone());
+                }
+            }
+        }
+
         Ok(Self { name_to_resource })
     }
 
