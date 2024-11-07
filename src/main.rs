@@ -1,15 +1,11 @@
 mod discovery;
 mod state;
 
-use std::collections::HashMap;
-
 use clap::Parser;
 use crossterm::event::KeyEvent;
-use itertools::Itertools;
 use kube::{
     api::{ApiResource, DynamicObject, ListParams},
-    discovery::verbs,
-    Api, Client, Discovery,
+    Api, Client,
 };
 use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
@@ -38,10 +34,11 @@ async fn main() -> DynResult<()> {
     let cli = Cli::parse();
 
     if cli.discovery {
-        let resources = discovery::discover_api_resources().await?;
+        let client = Client::try_default().await?;
+        let discovery = discovery::Discovery::discover(client.clone()).await?;
 
-        for (k, v) in resources.iter().sorted_by_key(|&(k, _)| k.clone()) {
-            println!("{k:?} -> {v:?}");
+        for (name, resource) in discovery.name_to_resource {
+            println!("{} -> {:?}", name, resource);
         }
 
         return Ok(());
@@ -58,30 +55,13 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
     let state = State::default();
 
     let client = Client::try_default().await?;
-    let discovery = Discovery::new(client.clone()).run().await?;
-
-    let _resources: HashMap<String, ApiResource> = discovery
-        .groups()
-        .flat_map(|group| {
-            group
-                .recommended_resources()
-                .iter()
-                .filter(|(_, caps)| caps.supports_operation(verbs::LIST))
-                .flat_map(|(res, _)| {
-                    [
-                        (res.kind.to_lowercase(), res.clone()),
-                        (res.plural.to_lowercase(), res.clone()),
-                    ]
-                })
-                .collect_vec()
-        })
-        .collect();
+    let discovery = discovery::Discovery::discover(client.clone()).await?;
 
     loop {
         let tab = state.active_tab();
 
-        let r = _resources.get(&tab.resource).expect("Unknown resource");
-        let api: Api<DynamicObject> = Api::all_with(client.clone(), r);
+        let r = discovery.get(&tab.resource).expect("Unknown resource");
+        let api: Api<DynamicObject> = Api::all_with(client.clone(), &ApiResource::from(r.as_ref()));
 
         // https://ratatui.rs/examples/widgets/table/
         let table = Table::new(
