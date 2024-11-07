@@ -1,15 +1,15 @@
+mod discovery;
 mod state;
 
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use clap::Parser;
 use crossterm::event::KeyEvent;
 use itertools::Itertools;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::APIResource;
 use kube::{
     api::{ApiResource, DynamicObject, ListParams},
     discovery::verbs,
-    Api, Client, Discovery, ResourceExt,
+    Api, Client, Discovery,
 };
 use ratatui::{
     crossterm::event::{self, Event, KeyCode, KeyEventKind},
@@ -31,37 +31,16 @@ struct Cli {
     discovery: bool,
 }
 
-type DynResult<T> = Result<T, Box<dyn std::error::Error>>;
+pub type DynResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 #[tokio::main]
 async fn main() -> DynResult<()> {
     let cli = Cli::parse();
 
     if cli.discovery {
-        let mut resources: HashMap<String, Rc<APIResource>> = HashMap::new();
-        let client = Client::try_default().await?;
-        let apigroups = client.list_api_groups().await?;
-        for g in apigroups.groups {
-            let ver = g
-                .preferred_version
-                .as_ref()
-                .or_else(|| g.versions.first())
-                .expect("preferred or versions exists");
-            let apis = client.list_api_group_resources(&ver.group_version).await?;
-            for api in apis.resources {
-                if !api.verbs.iter().any(|v| v == "list") {
-                    continue;
-                }
-                let a = Rc::new(api);
-                resources.insert(a.singular_name.clone(), a.clone());
-                resources.insert(a.name.clone(), a.clone());
-                for name in a.short_names.as_deref().unwrap_or_default() {
-                    resources.insert(name.clone(), a.clone());
-                }
-            }
-        }
+        let resources = discovery::discover_api_resources().await?;
 
-        for (k, v) in resources.iter().sorted_by_key(|(k, _)| k.clone()) {
+        for (k, v) in resources.iter().sorted_by_key(|&(k, _)| k.clone()) {
             println!("{k:?} -> {v:?}");
         }
 
