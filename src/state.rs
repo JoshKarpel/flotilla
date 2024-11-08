@@ -1,8 +1,15 @@
+use std::io;
+
+use crossterm::{
+    event,
+    event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
+};
+
 #[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct State {
-    tabs: Vec<Tab>,
-    active_tab_idx: usize,
+    pub(crate) tabs: Vec<Tab>,
+    pub(crate) active_tab_idx: usize,
 }
 
 impl Default for State {
@@ -14,9 +21,56 @@ impl Default for State {
     }
 }
 
+#[derive(Debug)]
+pub enum Action {
+    Continue,
+    Quit,
+}
+
 impl State {
     pub fn active_tab(&self) -> &Tab {
         &self.tabs[self.active_tab_idx]
+    }
+
+    pub fn active_tab_mut(&mut self) -> &mut Tab {
+        &mut self.tabs[self.active_tab_idx]
+    }
+
+    pub fn handle_events(&mut self) -> io::Result<Action> {
+        if let Event::Key(key) = event::read()? {
+            if key.kind == KeyEventKind::Press {
+                match key {
+                    KeyEvent {
+                        modifiers: KeyModifiers::CONTROL,
+                        code: KeyCode::Char('t'),
+                        ..
+                    } => self.new_tab(),
+                    KeyEvent {
+                        code: KeyCode::Tab, ..
+                    } => {
+                        self.active_tab_idx = self
+                            .active_tab_idx
+                            .saturating_add(1)
+                            .min(self.tabs.len() - 1)
+                    }
+                    KeyEvent {
+                        code: KeyCode::BackTab,
+                        ..
+                    } => self.active_tab_idx = self.active_tab_idx.saturating_sub(1),
+                    KeyEvent {
+                        code: KeyCode::Char('q'),
+                        ..
+                    } => return Ok(Action::Quit),
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(Action::Continue)
+    }
+
+    fn new_tab(&mut self) {
+        self.tabs.push(Tab::default());
     }
 }
 
