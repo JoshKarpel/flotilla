@@ -11,13 +11,13 @@ use ratatui::{
         Constraint::{Length, Min, Ratio},
         Layout,
     },
-    style::Color,
+    style::{Color, Styled},
     text::Text,
     widgets::{Block, Cell, Paragraph, Row, Table, Tabs},
     DefaultTerminal,
 };
 
-use crate::state::{Action, State};
+use crate::state::{Action, Editing, State};
 
 #[derive(Parser, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[command(version, about, long_about = None)]
@@ -58,23 +58,38 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
     let client = Client::try_default().await?;
     let discovery = discovery::Discovery::discover(client.clone()).await?;
 
+    let mut table = Table::default();
+
     loop {
         let tab = state.active_tab();
 
-        let r = discovery.get(&tab.resource).expect("Unknown resource");
-        let api: Api<DynamicObject> = Api::all_with(client.clone(), &ApiResource::from(r.as_ref()));
+        let res = discovery.get(&tab.resource);
 
-        // https://ratatui.rs/examples/widgets/table/
-        let table = Table::new(
-            api.list(&ListParams::default()).await?.iter().map(|obj| {
-                [obj.metadata.name.clone().expect("Object missing name")]
-                    .into_iter()
-                    .map(|c| Cell::from(Text::from(c)))
-                    .collect::<Row>()
-            }),
-            [Length(50)],
-        )
-        .block(Block::bordered());
+        if let Some(r) = res {
+            let api: Api<DynamicObject> =
+                Api::all_with(client.clone(), &ApiResource::from(r.as_ref()));
+
+            // https://ratatui.rs/examples/widgets/table/
+            table = Table::new(
+                api.list(&ListParams::default())
+                    .await?
+                    .iter()
+                    .filter(|&obj| {
+                        obj.metadata
+                            .name
+                            .clone()
+                            .is_some_and(|n| n.starts_with(&tab.filter))
+                    })
+                    .map(|obj| {
+                        [obj.metadata.name.clone().expect("Object missing name")]
+                            .into_iter()
+                            .map(|c| Cell::from(Text::from(c)))
+                            .collect::<Row>()
+                    }),
+                [Length(50)],
+            )
+            .block(Block::bordered());
+        }
 
         terminal.draw(|frame| {
             let [tabs_area, meta, _resources_layout] =
@@ -82,12 +97,39 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
             let [namespace, resource, filter] =
                 Layout::horizontal([Ratio(1, 3), Ratio(1, 3), Ratio(1, 3)]).areas(meta);
 
-            let namespace_p = Paragraph::new(tab.namespace.clone().unwrap_or("".into()))
-                .block(Block::bordered().title("Namespace"));
-            let resource_p =
-                Paragraph::new(tab.resource.clone()).block(Block::bordered().title("Resource"));
-            let filter_p =
-                Paragraph::new(tab.filter.clone()).block(Block::bordered().title("Filter"));
+            let namespace_p = Paragraph::new(tab.namespace.clone().unwrap_or("".into())).block(
+                Block::bordered().title("Namespace").set_style(
+                    if let Some(Editing::Namespace) = state.editing {
+                        Color::LightCyan
+                    } else {
+                        Color::White
+                    },
+                ),
+            );
+            let resource_p = Paragraph::new(tab.resource.clone())
+                .set_style(
+                    if res.is_some() {
+                        Color::White
+                    } else {
+                        Color::Red
+                    },
+                )
+                .block(Block::bordered().title("Resource").border_style(
+                    if let Some(Editing::Resource) = state.editing {
+                        Color::LightCyan
+                    } else {
+                        Color::White
+                    },
+                ));
+            let filter_p = Paragraph::new(tab.filter.clone()).block(
+                Block::bordered().title("Filter").set_style(
+                    if let Some(Editing::Filter) = state.editing {
+                        Color::LightCyan
+                    } else {
+                        Color::White
+                    },
+                ),
+            );
 
             let highlight_style = (Color::default(), Color::Cyan);
             let tabs = Tabs::new(
@@ -106,7 +148,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
             frame.render_widget(namespace_p, namespace);
             frame.render_widget(resource_p, resource);
             frame.render_widget(filter_p, filter);
-            frame.render_widget(table, _resources_layout);
+            frame.render_widget(&table, _resources_layout);
         })?;
 
         if let Ok(Action::Quit) = state.handle_events() {

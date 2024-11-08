@@ -10,6 +10,7 @@ use crossterm::{
 pub(crate) struct State {
     pub(crate) tabs: Vec<Tab>,
     pub(crate) active_tab_idx: usize,
+    pub(crate) editing: Option<Editing>,
 }
 
 impl Default for State {
@@ -17,12 +18,20 @@ impl Default for State {
         Self {
             tabs: vec![Tab::default()],
             active_tab_idx: 0,
+            editing: None,
         }
     }
 }
 
 #[derive(Debug)]
-pub enum Action {
+pub(crate) enum Editing {
+    Namespace,
+    Resource,
+    Filter,
+}
+
+#[derive(Debug)]
+pub(crate) enum Action {
     Continue,
     Quit,
 }
@@ -57,6 +66,56 @@ impl State {
                         code: KeyCode::BackTab,
                         ..
                     } => self.active_tab_idx = self.active_tab_idx.saturating_sub(1),
+                    KeyEvent {
+                        code: KeyCode::Char('f'),
+                        ..
+                    } if self.editing.is_none() => self.editing = Some(Editing::Filter),
+                    KeyEvent {
+                        code: KeyCode::Char('r'),
+                        ..
+                    } if self.editing.is_none() => self.editing = Some(Editing::Resource),
+                    KeyEvent {
+                        code: KeyCode::Char('n'),
+                        ..
+                    } if self.editing.is_none() => self.editing = Some(Editing::Namespace),
+                    KeyEvent {
+                        code: KeyCode::Char(c),
+                        ..
+                    } if self.editing.is_some() => match self.editing.as_ref().unwrap() {
+                        Editing::Filter => {
+                            self.active_tab_mut().filter.push(c);
+                        }
+                        Editing::Namespace => {
+                            if let Some(ref mut n) = self.active_tab_mut().namespace {
+                                n.push(c);
+                            }
+                        }
+                        Editing::Resource => {
+                            self.active_tab_mut().resource.push(c);
+                        }
+                    },
+                    KeyEvent {
+                        code: KeyCode::Backspace,
+                        ..
+                    } if self.editing.is_some() => match self.editing.as_ref().unwrap() {
+                        Editing::Filter => {
+                            self.active_tab_mut().filter.pop();
+                        }
+                        Editing::Namespace => {
+                            if let Some(ref mut n) = self.active_tab_mut().namespace {
+                                n.pop();
+                            }
+                        }
+                        Editing::Resource => {
+                            self.active_tab_mut().resource.pop();
+                        }
+                    },
+                    KeyEvent {
+                        code: KeyCode::Enter | KeyCode::Esc,
+                        ..
+                    } if self.editing.is_some() => {
+                        self.editing = None;
+                    }
                     KeyEvent {
                         code: KeyCode::Char('q'),
                         ..
