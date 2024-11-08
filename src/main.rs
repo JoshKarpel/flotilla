@@ -17,7 +17,7 @@ use ratatui::{
     DefaultTerminal,
 };
 
-use crate::state::{Action, Editing, State};
+use crate::state::{Action, Editing, UIState};
 
 #[derive(Parser, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[command(version, about, long_about = None)]
@@ -51,7 +51,7 @@ async fn main() -> DynResult<()> {
 }
 
 async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
-    let mut state = State::default();
+    let mut state = UIState::default();
 
     state.active_tab_mut().resource = "svc".into();
 

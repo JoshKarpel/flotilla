@@ -1,19 +1,27 @@
-use std::io;
+use std::{collections::HashMap, io};
 
 use crossterm::{
     event,
     event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
 };
+use kube::api::DynamicObject;
 
-#[allow(dead_code)]
+use crate::discovery::{DiscoveredAPIResource, Discovery};
+
 #[derive(Debug)]
-pub(crate) struct State {
+pub(crate) struct KubeState {
+    discovery: Discovery,
+    resources: HashMap<DiscoveredAPIResource, Vec<DynamicObject>>,
+}
+
+#[derive(Debug)]
+pub(crate) struct UIState {
     pub(crate) tabs: Vec<Tab>,
     pub(crate) active_tab_idx: usize,
     pub(crate) editing: Option<Editing>,
 }
 
-impl Default for State {
+impl Default for UIState {
     fn default() -> Self {
         Self {
             tabs: vec![Tab::default()],
@@ -36,7 +44,7 @@ pub(crate) enum Action {
     Quit,
 }
 
-impl State {
+impl UIState {
     pub fn active_tab(&self) -> &Tab {
         &self.tabs[self.active_tab_idx]
     }
