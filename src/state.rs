@@ -9,6 +9,12 @@ use kube::api::DynamicObject;
 use crate::discovery::{DiscoveredAPIResource, Discovery};
 
 #[derive(Debug)]
+pub(crate) struct App {
+    kube: KubeState,
+    ui: UIState,
+}
+
+#[derive(Debug)]
 pub(crate) struct KubeState {
     discovery: Discovery,
     resources: HashMap<DiscoveredAPIResource, Vec<DynamicObject>>,
