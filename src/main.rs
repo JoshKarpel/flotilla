@@ -51,9 +51,7 @@ async fn main() -> DynResult<()> {
 }
 
 async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
-    let mut state = UIState::default();
-
-    state.active_tab_mut().resource = "svc".into();
+    let mut ui = UIState::default();
 
     let client = Client::try_default().await?;
     let discovery = discovery::Discovery::discover(client.clone()).await?;
@@ -61,7 +59,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
     let mut table = Table::default();
 
     loop {
-        let tab = state.active_tab();
+        let tab = ui.active_tab();
 
         let res = discovery.get(&tab.resource);
 
@@ -99,7 +97,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
 
             let namespace_p = Paragraph::new(tab.namespace.clone().unwrap_or("".into())).block(
                 Block::bordered().title("Namespace").set_style(
-                    if let Some(Editing::Namespace) = state.editing {
+                    if let Some(Editing::Namespace) = ui.editing {
                         Color::LightCyan
                     } else {
                         Color::White
@@ -115,7 +113,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                     },
                 )
                 .block(Block::bordered().title("Resource").border_style(
-                    if let Some(Editing::Resource) = state.editing {
+                    if let Some(Editing::Resource) = ui.editing {
                         Color::LightCyan
                     } else {
                         Color::White
@@ -123,7 +121,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                 ));
             let filter_p = Paragraph::new(tab.filter.clone()).block(
                 Block::bordered().title("Filter").set_style(
-                    if let Some(Editing::Filter) = state.editing {
+                    if let Some(Editing::Filter) = ui.editing {
                         Color::LightCyan
                     } else {
                         Color::White
@@ -133,14 +131,13 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
 
             let highlight_style = (Color::default(), Color::Cyan);
             let tabs = Tabs::new(
-                state
-                    .tabs
+                ui.tabs
                     .iter()
                     .enumerate()
                     .map(|(idx, t)| format!("{idx} {}", t.resource)),
             )
             .highlight_style(highlight_style)
-            .select(state.active_tab_idx)
+            .select(ui.active_tab_idx)
             .padding("", "")
             .divider(" ");
 
@@ -151,7 +148,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
             frame.render_widget(&table, _resources_layout);
         })?;
 
-        if let Ok(Action::Quit) = state.handle_events() {
+        if let Ok(Action::Quit) = ui.handle_events() {
             return Ok(());
         }
     }
