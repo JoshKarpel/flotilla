@@ -383,6 +383,8 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "ratatui",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 
