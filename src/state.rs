@@ -4,17 +4,18 @@ use crossterm::{
     event,
     event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers},
 };
-use kube::{api::DynamicObject, Client};
+use kube::Client;
 
 use crate::{
     discovery::{DiscoveredAPIResource, Discovery},
+    table::ResourceTable,
     DynResult,
 };
 
 #[derive(Debug)]
 pub(crate) struct App {
-    kube: KubeState,
-    ui: UIState,
+    pub(crate) kube: KubeState,
+    pub(crate) ui: UIState,
 }
 
 impl App {
@@ -25,12 +26,12 @@ impl App {
 
 #[derive(Debug)]
 pub(crate) struct KubeState {
-    discovery: Discovery,
-    resources: HashMap<DiscoveredAPIResource, Vec<DynamicObject>>,
+    pub(crate) discovery: Discovery,
+    pub(crate) resources: HashMap<DiscoveredAPIResource, ResourceTable>,
 }
 
 impl KubeState {
-    pub(crate) async fn new(client: Client) -> DynResult<Self> {
+    pub(crate) async fn new(client: &Client) -> DynResult<Self> {
         Ok(Self {
             discovery: Discovery::discover(client).await?,
             resources: HashMap::new(),

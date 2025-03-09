@@ -16,7 +16,7 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::{
-    state::{Action, Editing, UIState},
+    state::{Action, App, Editing, KubeState, UIState},
     table::ResourceTable,
 };
 
@@ -35,7 +35,7 @@ async fn main() -> DynResult<()> {
 
     if cli.discovery {
         let client = Client::try_default().await?;
-        let discovery = discovery::Discovery::discover(client.clone()).await?;
+        let discovery = discovery::Discovery::discover(&client).await?;
 
         for (name, resource) in discovery.name_to_resource {
             println!("{} -> {:?}", name, resource);
@@ -52,19 +52,19 @@ async fn main() -> DynResult<()> {
 }
 
 async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
-    let mut ui = UIState::default();
-
     let client = Client::try_default().await?;
-    let discovery = discovery::Discovery::discover(client.clone()).await?;
+
+    let mut app = App::new(KubeState::new(&client).await?, UIState::default());
 
     let mut table = Table::default();
 
     loop {
-        let tab = ui.active_tab();
+        let tab = app.ui.active_tab();
 
-        let res = discovery.get(&tab.resource);
+        let res = app.kube.discovery.get(&tab.resource);
 
         if let Some(r) = res {
+            // TODO: get resources tables in the background on a regular interval instead of on redraw
             let resource_table: ResourceTable = client
                 .request(r.table_request(tab.namespace.as_deref()))
                 .await?;
@@ -116,7 +116,8 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
 
             table = Table::new(rows, lengths)
                 .header(header_row)
-                .block(Block::bordered());
+                .block(Block::bordered())
+                .column_spacing(2);
         }
 
         terminal.draw(|frame| {
@@ -127,7 +128,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
 
             let namespace_p = Paragraph::new(tab.namespace.clone().unwrap_or("".into())).block(
                 Block::bordered().title("Namespace").set_style(
-                    if let Some(Editing::Namespace) = ui.editing {
+                    if let Some(Editing::Namespace) = app.ui.editing {
                         Color::LightCyan
                     } else {
                         Color::White
@@ -143,7 +144,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                     },
                 )
                 .block(Block::bordered().title("Resource").border_style(
-                    if let Some(Editing::Resource) = ui.editing {
+                    if let Some(Editing::Resource) = app.ui.editing {
                         Color::LightCyan
                     } else {
                         Color::White
@@ -151,7 +152,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                 ));
             let filter_p = Paragraph::new(tab.filter.clone()).block(
                 Block::bordered().title("Filter").set_style(
-                    if let Some(Editing::Filter) = ui.editing {
+                    if let Some(Editing::Filter) = app.ui.editing {
                         Color::LightCyan
                     } else {
                         Color::White
@@ -161,13 +162,14 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
 
             let highlight_style = (Color::default(), Color::Cyan);
             let tabs = Tabs::new(
-                ui.tabs
+                app.ui
+                    .tabs
                     .iter()
                     .enumerate()
                     .map(|(idx, t)| format!("{idx} {}", t.resource)),
             )
             .highlight_style(highlight_style)
-            .select(ui.active_tab_idx)
+            .select(app.ui.active_tab_idx)
             .padding("", "")
             .divider(" ");
 
@@ -178,7 +180,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
             frame.render_widget(&table, _resources_layout);
         })?;
 
-        if let Ok(Action::Quit) = ui.handle_events() {
+        if let Ok(Action::Quit) = app.ui.handle_events() {
             return Ok(());
         }
     }

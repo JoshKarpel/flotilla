@@ -100,7 +100,7 @@ pub(crate) struct Discovery {
 }
 
 impl Discovery {
-    pub(crate) async fn discover(client: Client) -> DynResult<Self> {
+    pub(crate) async fn discover(client: &Client) -> DynResult<Self> {
         // https://github.com/kube-rs/kube/blob/d28a7152538c2560f7af9b7339c090c7ccba9fb6/kube-client/src/discovery/mod.rs#L111-L130
         let mut name_to_resource: HashMap<String, Rc<DiscoveredAPIResource>> = HashMap::new();
 
