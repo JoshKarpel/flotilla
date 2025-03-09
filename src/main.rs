@@ -9,7 +9,7 @@ use ratatui::{
         Constraint::{Length, Min, Ratio},
         Layout,
     },
-    style::{Color, Styled},
+    style::{palette::tailwind::SLATE, Color, Styled, Stylize},
     widgets::{Block, Cell, Paragraph, Row, Table, Tabs},
     DefaultTerminal,
 };
@@ -89,7 +89,9 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
             let header_row = header_strings
                 .iter()
                 .map(|s| Cell::from(s.clone()))
-                .collect::<Row>();
+                .collect::<Row>()
+                .bold()
+                .bg(SLATE.c800);
             let rows = row_strings
                 .iter()
                 .map(|r| r.iter().map(|s| Cell::from(s.clone())).collect::<Row>());
