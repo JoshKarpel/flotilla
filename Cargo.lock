@@ -379,6 +379,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "crossterm",
+ "http",
  "itertools 0.14.0",
  "k8s-openapi",
  "kube",

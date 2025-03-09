@@ -1,23 +1,26 @@
 mod discovery;
 mod state;
+mod table;
+
+use std::{fs::File, io::Write};
 
 use clap::Parser;
-use kube::{
-    api::{ApiResource, DynamicObject, ListParams},
-    Api, Client,
-};
+use http::Request;
+use kube::Client;
 use ratatui::{
     layout::{
         Constraint::{Length, Min, Ratio},
         Layout,
     },
     style::{Color, Styled},
-    text::Text,
     widgets::{Block, Cell, Paragraph, Row, Table, Tabs},
     DefaultTerminal,
 };
 
-use crate::state::{Action, Editing, UIState};
+use crate::{
+    state::{Action, Editing, UIState},
+    table::ResourceTable,
+};
 
 #[derive(Parser, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[command(version, about, long_about = None)]
@@ -36,9 +39,17 @@ async fn main() -> DynResult<()> {
         let client = Client::try_default().await?;
         let discovery = discovery::Discovery::discover(client.clone()).await?;
 
-        for (name, resource) in discovery.name_to_resource {
-            println!("{} -> {:?}", name, resource);
-        }
+        // for (name, resource) in discovery.name_to_resource {
+        //     println!("{} -> {:?}", name, resource);
+        // }
+
+        let request = Request::builder()
+            .uri("/api/v1/namespace/default/pods")
+            .header("Accept", "application/json;as=Table;g=meta.k8s.io;v=v1")
+            .body(vec![])?;
+        let response: ResourceTable = client.request(request).await?;
+        //
+        dbg!(response);
 
         return Ok(());
     }
@@ -51,6 +62,7 @@ async fn main() -> DynResult<()> {
 }
 
 async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
+    let mut log = File::create("flotilla.log")?;
     let mut ui = UIState::default();
 
     let client = Client::try_default().await?;
@@ -64,35 +76,38 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
         let res = discovery.get(&tab.resource);
 
         if let Some(r) = res {
-            let api: Api<DynamicObject> =
-                Api::all_with(client.clone(), &ApiResource::from(r.as_ref()));
+            let req = Request::builder()
+                .uri(r.url_path(tab.namespace.as_deref()))
+                .body(vec![])
+                .unwrap();
+            log.write_all(req.uri().to_string().as_bytes())?;
+            log.flush()?;
+            let resource_table: ResourceTable = client.request(req).await?;
 
             // https://ratatui.rs/examples/widgets/table/
-            table = Table::new(
-                api.list(&ListParams::default())
-                    .await?
+            let header = resource_table
+                .column_definitions
+                .iter()
+                .map(|cd| Cell::from(cd.name.clone()))
+                .collect::<Row>();
+            let rows = resource_table.rows.iter().map(|row| {
+                row.cells
                     .iter()
-                    .filter(|&obj| {
-                        obj.metadata
-                            .name
-                            .clone()
-                            .is_some_and(|n| n.starts_with(&tab.filter))
-                    })
-                    .map(|obj| {
-                        [obj.metadata.name.clone().expect("Object missing name")]
-                            .into_iter()
-                            .map(|c| Cell::from(Text::from(c)))
-                            .collect::<Row>()
-                    }),
-                [Length(50)],
+                    .map(|cell| Cell::from(cell.clone()))
+                    .collect::<Row>()
+            });
+            table = Table::new(
+                rows,
+                [Length(10), Length(10), Length(10), Length(10), Length(10)],
             )
+            .header(header)
             .block(Block::bordered());
         }
 
         terminal.draw(|frame| {
             let [tabs_area, meta, _resources_layout] =
                 Layout::vertical([Length(1), Length(3), Min(0)]).areas(frame.area());
-            let [namespace, resource, filter] =
+            let [namespace_selector, resource_selector, name_filter] =
                 Layout::horizontal([Ratio(1, 3), Ratio(1, 3), Ratio(1, 3)]).areas(meta);
 
             let namespace_p = Paragraph::new(tab.namespace.clone().unwrap_or("".into())).block(
@@ -142,9 +157,9 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
             .divider(" ");
 
             frame.render_widget(tabs, tabs_area);
-            frame.render_widget(namespace_p, namespace);
-            frame.render_widget(resource_p, resource);
-            frame.render_widget(filter_p, filter);
+            frame.render_widget(namespace_p, namespace_selector);
+            frame.render_widget(resource_p, resource_selector);
+            frame.render_widget(filter_p, name_filter);
             frame.render_widget(&table, _resources_layout);
         })?;
 

@@ -56,6 +56,21 @@ impl DiscoveredAPIResource {
             namespaced: api_resource.namespaced,
         })
     }
+
+    pub fn url_path(&self, namespace: Option<&str>) -> String {
+        let n = if let Some(ns) = namespace {
+            format!("namespaces/{ns}/")
+        } else {
+            "".into()
+        };
+        format!(
+            "/{group}/{api_version}/{namespaces}{plural}",
+            group = if self.group.is_empty() { "api" } else { "apis" },
+            api_version = self.api_version,
+            namespaces = n,
+            plural = self.plural,
+        )
+    }
 }
 
 impl From<&DiscoveredAPIResource> for ApiResource {
