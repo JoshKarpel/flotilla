@@ -1,5 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
+use http::Request;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::APIResource;
 use kube::{
     api::ApiResource,
@@ -70,6 +71,14 @@ impl DiscoveredAPIResource {
             namespaces = n,
             plural = self.plural,
         )
+    }
+
+    pub fn table_request(&self, namespace: Option<&str>) -> Request<Vec<u8>> {
+        Request::builder()
+            .uri(self.url_path(namespace))
+            .header("Accept", "application/json;as=Table;g=meta.k8s.io;v=v1")
+            .body(vec![])
+            .unwrap()
     }
 }
 

@@ -2,10 +2,7 @@ mod discovery;
 mod state;
 mod table;
 
-use std::{fs::File, io::Write};
-
 use clap::Parser;
-use http::Request;
 use kube::Client;
 use ratatui::{
     layout::{
@@ -39,17 +36,9 @@ async fn main() -> DynResult<()> {
         let client = Client::try_default().await?;
         let discovery = discovery::Discovery::discover(client.clone()).await?;
 
-        // for (name, resource) in discovery.name_to_resource {
-        //     println!("{} -> {:?}", name, resource);
-        // }
-
-        let request = Request::builder()
-            .uri("/api/v1/namespace/default/pods")
-            .header("Accept", "application/json;as=Table;g=meta.k8s.io;v=v1")
-            .body(vec![])?;
-        let response: ResourceTable = client.request(request).await?;
-        //
-        dbg!(response);
+        for (name, resource) in discovery.name_to_resource {
+            println!("{} -> {:?}", name, resource);
+        }
 
         return Ok(());
     }
@@ -62,7 +51,6 @@ async fn main() -> DynResult<()> {
 }
 
 async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
-    let mut log = File::create("flotilla.log")?;
     let mut ui = UIState::default();
 
     let client = Client::try_default().await?;
@@ -76,13 +64,9 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
         let res = discovery.get(&tab.resource);
 
         if let Some(r) = res {
-            let req = Request::builder()
-                .uri(r.url_path(tab.namespace.as_deref()))
-                .body(vec![])
-                .unwrap();
-            log.write_all(req.uri().to_string().as_bytes())?;
-            log.flush()?;
-            let resource_table: ResourceTable = client.request(req).await?;
+            let resource_table: ResourceTable = client
+                .request(r.table_request(tab.namespace.as_deref()))
+                .await?;
 
             // https://ratatui.rs/examples/widgets/table/
             let header = resource_table
@@ -96,12 +80,11 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                     .map(|cell| Cell::from(cell.clone()))
                     .collect::<Row>()
             });
-            table = Table::new(
-                rows,
-                [Length(10), Length(10), Length(10), Length(10), Length(10)],
-            )
-            .header(header)
-            .block(Block::bordered());
+            // TODO: must account for actual lengths
+            let lengths = resource_table.column_definitions.iter().map(|_| Length(10));
+            table = Table::new(rows, lengths)
+                .header(header)
+                .block(Block::bordered());
         }
 
         terminal.draw(|frame| {
