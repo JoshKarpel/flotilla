@@ -150,7 +150,8 @@ impl UIState {
                         self.editing = None;
                     }
                     KeyEvent {
-                        code: KeyCode::Char('q'),
+                        modifiers: KeyModifiers::CONTROL,
+                        code: KeyCode::Char('c'),
                         ..
                     } => return Ok(Action::Quit),
                     _ => {}
