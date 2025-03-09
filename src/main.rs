@@ -13,6 +13,7 @@ use ratatui::{
     widgets::{Block, Cell, Paragraph, Row, Table, Tabs},
     DefaultTerminal,
 };
+use unicode_width::UnicodeWidthStr;
 
 use crate::{
     state::{Action, Editing, UIState},
@@ -69,21 +70,51 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                 .await?;
 
             // https://ratatui.rs/examples/widgets/table/
-            let header = resource_table
+            let header_strings: Vec<String> = resource_table
                 .column_definitions
                 .iter()
-                .map(|cd| Cell::from(cd.name.clone()))
+                .map(|cd| cd.name.clone())
+                .collect::<Vec<String>>();
+            let row_strings: Vec<Vec<String>> = resource_table
+                .rows
+                .iter()
+                .map(|row| {
+                    row.cells
+                        .iter()
+                        .map(|cell| cell.to_string())
+                        .collect::<Vec<String>>()
+                })
+                .collect();
+
+            let header_row = header_strings
+                .iter()
+                .map(|s| Cell::from(s.clone()))
                 .collect::<Row>();
-            let rows = resource_table.rows.iter().map(|row| {
-                row.cells
-                    .iter()
-                    .map(|cell| Cell::from(cell.to_string()))
-                    .collect::<Row>()
-            });
+            let rows = row_strings
+                .iter()
+                .map(|r| r.iter().map(|s| Cell::from(s.clone())).collect::<Row>());
+
             // TODO: must account for actual lengths
-            let lengths = resource_table.column_definitions.iter().map(|_| Length(10));
+            let lengths = row_strings
+                .iter()
+                .map(|r| r.iter().map(|s| s.width()).collect::<Vec<usize>>())
+                .fold(
+                    header_strings
+                        .iter()
+                        .map(|s| s.width())
+                        .collect::<Vec<usize>>(),
+                    |acc, x| {
+                        acc.iter()
+                            .zip(x)
+                            .map(|(a, b)| *a.max(&b))
+                            .collect::<Vec<usize>>()
+                    },
+                )
+                .into_iter()
+                .map(|l| Length(l as u16));
+
             table = Table::new(rows, lengths)
-                .header(header)
+                .header(header_row)
                 .block(Block::bordered());
         }
 
