@@ -96,7 +96,6 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                 .iter()
                 .map(|r| r.iter().map(|s| Cell::from(s.clone())).collect::<Row>());
 
-            // TODO: must account for actual lengths
             let lengths = row_strings
                 .iter()
                 .map(|r| r.iter().map(|s| s.width()).collect::<Vec<usize>>())
