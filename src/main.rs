@@ -77,7 +77,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
             let rows = resource_table.rows.iter().map(|row| {
                 row.cells
                     .iter()
-                    .map(|cell| Cell::from(cell.clone()))
+                    .map(|cell| Cell::from(cell.to_string()))
                     .collect::<Row>()
             });
             // TODO: must account for actual lengths

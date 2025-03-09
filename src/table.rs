@@ -1,3 +1,5 @@
+use std::fmt::{Display, Error, Formatter};
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -18,7 +20,27 @@ pub struct ColumnDefinition {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum CellValue {
+    String(String),
+    Number(f64),
+}
+
+impl Display for CellValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(
+            f,
+            "{}",
+            match self {
+                CellValue::String(s) => s.clone(),
+                CellValue::Number(n) => n.to_string(),
+            }
+        )
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Row {
-    pub cells: Vec<String>,
+    pub cells: Vec<CellValue>,
 }
