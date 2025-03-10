@@ -1,6 +1,7 @@
 mod discovery;
 mod state;
 mod table;
+mod ui;
 
 use clap::Parser;
 use kube::Client;
@@ -13,11 +14,11 @@ use ratatui::{
     widgets::{Block, Cell, Paragraph, Row, Table, Tabs},
     DefaultTerminal,
 };
-use unicode_width::UnicodeWidthStr;
 
 use crate::{
     state::{Action, App, Editing, KubeState, UIState},
     table::ResourceTable,
+    ui::table_column_constraints,
 };
 
 #[derive(Parser, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -96,25 +97,9 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
                 .iter()
                 .map(|r| r.iter().map(|s| Cell::from(s.clone())).collect::<Row>());
 
-            let lengths = row_strings
-                .iter()
-                .map(|r| r.iter().map(|s| s.width()).collect::<Vec<usize>>())
-                .fold(
-                    header_strings
-                        .iter()
-                        .map(|s| s.width())
-                        .collect::<Vec<usize>>(),
-                    |acc, x| {
-                        acc.iter()
-                            .zip(x)
-                            .map(|(a, b)| *a.max(&b))
-                            .collect::<Vec<usize>>()
-                    },
-                )
-                .into_iter()
-                .map(|l| Length(l as u16));
+            let constraints = crate::table_column_constraints(&header_strings, &row_strings);
 
-            table = Table::new(rows, lengths)
+            table = Table::new(rows, constraints)
                 .header(header_row)
                 .block(Block::bordered())
                 .column_spacing(2);
