@@ -79,6 +79,7 @@ async fn run(mut terminal: DefaultTerminal) -> DynResult<()> {
             let row_strings: Vec<Vec<String>> = resource_table
                 .rows
                 .iter()
+                // TODO: filter on resource name
                 .map(|row| {
                     row.cells
                         .iter()
