@@ -2,6 +2,13 @@
 name = "flotilla"
 version = "0.1.0"
 edition = "2021"
+description = "A TUI Kubernetes dashboard"
+authors = ["Josh Karpel <josh.karpel@gmail.com>"]
+readme = "README.md"
+license = "MIT"
+documentation = "https://github.com/JoshKarpel/flotilla"
+homepage = "https://github.com/JoshKarpel/flotilla"
+repository = "https://github.com/JoshKarpel/flotilla"
 
 [dependencies]
 clap = { version = "4.5.31", features = ["derive"] }
