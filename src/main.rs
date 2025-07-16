@@ -39,7 +39,7 @@ async fn main() -> DynResult<()> {
         let discovery = discovery::Discovery::discover(&client).await?;
 
         for (name, resource) in discovery.name_to_resource {
-            println!("{} -> {:?}", name, resource);
+            println!("{name} -> {resource:?}");
         }
 
         return Ok(());
